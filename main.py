@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 import random
 import json
 import os
@@ -22,6 +22,9 @@ def save_data(data):
     with open(get_file_path(), "w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=4)
 
+def normalize(value: str) -> str:
+    return value.strip().lower()
+
 @app.get("/")
 def read_root():
     return {"message": "Pot-Game API is reading from JSON!"}
@@ -41,6 +44,20 @@ def get_pot():
     )
     return pot
 
+@app.get("/items")
+def list_all_items():
+    data = load_data()
+    emotions = data.get("emotions", [])
+    topics = data.get("topics", [])
+    return {
+        "emotions": emotions,
+        "topics": topics,
+        "counts": {
+            "emotions": len(emotions),
+            "topics": len(topics)
+        }
+    }
+
 @app.post("/add-pot")
 def add_pot(new_item: PotItem):
     if not new_item.emotions and not new_item.topics:
@@ -50,16 +67,47 @@ def add_pot(new_item: PotItem):
     data.setdefault("emotions", [])
     data.setdefault("topics", [])
 
+    existing_emotions = {normalize(e) for e in data["emotions"] if isinstance(e, str)}
+    existing_topics = {normalize(t) for t in data["topics"] if isinstance(t, str)}
+
     added = {"emotions": None, "topics": None}
 
     if new_item.emotions:
-        data["emotions"].append(new_item.emotions)
-        added["emotions"] = new_item.emotions
+        clean_emotion = new_item.emotions.strip()
+        if normalize(clean_emotion) in existing_emotions:
+            raise HTTPException(status_code=409, detail=f'Duplicate emotion: "{clean_emotion}" already exists.')
+        data["emotions"].append(clean_emotion)
+        added["emotions"] = clean_emotion
 
     if new_item.topics:
-        data["topics"].append(new_item.topics)
-        added["topics"] = new_item.topics
+        clean_topic = new_item.topics.strip()
+        if normalize(clean_topic) in existing_topics:
+            raise HTTPException(status_code=409, detail=f'Duplicate topic: "{clean_topic}" already exists.')
+        data["topics"].append(clean_topic)
+        added["topics"] = clean_topic
 
     save_data(data)
-    return {"message": "New item added to the pot!", "added": added}
+    return {"message": "New item added successfully!", "added": added}
+
+@app.delete("/items")
+def delete_item(
+    kind: Literal["emotions", "topics"] = Query(..., description="Select a category to delete from: 'emotions' or 'topics'"),
+    value: str = Query(..., min_length=1, description="Write the exact value to delete from the selected category.")
+):
+    data = load_data()
+    items = data.get(kind, [])
+    target = normalize(value)
+    index_to_delete = next(
+         (i for i, item in enumerate(items) if isinstance(item, str) and normalize(item) == target),
+        None
+    )
+
+    if index_to_delete is None:
+        raise HTTPException(status_code=404, detail=f'Item not found in "{kind}": "{value}"')
+
+    removed = items.pop(index_to_delete)
+    data[kind] = items
+    save_data(data)
+
+    return {"message": "Item deleted successfully", "kind": kind, "removed": removed}
     
