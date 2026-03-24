@@ -7,6 +7,11 @@ import os
 
 app = FastAPI()
 
+class UpdateItemRequest(BaseModel):
+    kind: Literal["emotions", "topics"]
+    old_value: str
+    new_value: str
+
 class PotItem(BaseModel):
     emotions: Optional[str] = None
     topics: Optional[str] = None
@@ -88,6 +93,55 @@ def add_pot(new_item: PotItem):
 
     save_data(data)
     return {"message": "New item added successfully!", "added": added}
+
+@app.put("/items")
+def update_item(payload: UpdateItemRequest):
+    data = load_data()
+    data.setdefault("emotions", [])
+    data.setdefault("topics", [])
+
+    items = data[payload.kind]
+
+    old_normalized = normalize(payload.old_value)
+    new_clean = payload.new_value.strip()
+    new_normalized = normalize(new_clean)
+
+    if not new_clean:
+        raise HTTPException(status_code=400, detail="New value cannot be empty.")
+    
+    index_to_update = next(
+        (i for i, item in enumerate(items) if isinstance(item, str) and normalize(item) == old_normalized),
+        None
+    )
+
+    if index_to_update is None:
+        raise HTTPException(status_code=404, detail=f'Item not found in "{payload.kind}": "{payload.old_value}"')
+
+    if index_to_update is None:
+        raise HTTPException(status_code=404, detail=f'Item not found in "{payload.kind}": "{payload.old_value}"')
+
+    duplicate_exists = any(
+        i != index_to_update and isinstance(item, str) and normalize(item) == new_normalized
+        for i, item in enumerate(items)
+    )
+
+    if duplicate_exists:
+        raise HTTPException(
+            status_code=409,
+            detail=f'Duplicate {payload.kind[:-1]}: "{new_clean}" already exists.'
+        )
+
+    old_item = items[index_to_update]
+    items[index_to_update] = new_clean
+    data[payload.kind] = items
+    save_data(data)
+
+    return {
+        "message": "Item updated successfully",
+        "kind": payload.kind,
+        "old_value": old_item,
+        "new_value": new_clean
+    }
 
 @app.delete("/items")
 def delete_item(
