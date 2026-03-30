@@ -1,20 +1,21 @@
 # Pot Game API 🍯
 
-API REST robusta construida con _FastAPI_ diseñada para contribuir en la escritura creativa mediante la colisión aleatoria de conceptos (emociones y tópicos) y la gestión integral de un catálogo creativo con CRUD implementado.
+API REST construida con FastAPI para apoyar escritura creativa mediante combinaciones aleatorias de emociones y topicos, ademas de gestion CRUD del catalogo.
 
-## 🚀 Inicio Rápido
+## 🚀 Inicio Rapido
 
 ### Requisitos Previos
 
-•⁠ ⁠Python 3.11+
-•⁠ ⁠Git
+- Python 3.11+
+- Git
+- Docker (opcional, solo si quieres ejecutar en contenedor)
 
-### Instalación
+### Instalacion
 
 ```bash
 # 1. Clonar el repositorio
-git clone [https://github.com/tu-usuario/pot-Game.git](https://github.com/tu-usuario/Pot-Game.git)
-cd Pot-Game
+git clone https://github.com/chinchosero/pot-game.git
+cd pot-game
 
 # 2. Configurar entorno virtual
 python3 -m venv venv
@@ -22,62 +23,95 @@ python3 -m venv venv
 # 3. Activar entorno
 # macOS/Linux:
 source venv/bin/activate
-# Windows:
-.\venv\Scripts\activate
+# Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
 
 # 4. Instalar dependencias
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Ejecución
+### Ejecucion Local
 
 ```bash
 uvicorn main:app --reload
 ```
 
-La API estará disponible en: http://127.0.0.1:8000
+La API estara disponible en: http://127.0.0.1:8000
 
-Documentación interactiva (Swagger UI):
+Documentacion interactiva (Swagger UI):
 
 - http://127.0.0.1:8000/docs
 
-## 🛠️ Stack Técnico e Infraestructura
+## 🐳 Despliegue con Docker
+
+Si prefieres ejecutar la aplicacion de forma aislada, usa Docker.
+
+### 1. Construir la imagen
+
+```bash
+docker build -t pot-game-api .
+```
+
+### 2. Ejecutar el contenedor
+
+```bash
+docker run -d --name pot-game-container -p 8000:8000 pot-game-api
+```
+
+### 3. Comandos utiles de Docker
+
+```bash
+# Ver contenedores en ejecucion
+docker ps
+
+# Ver logs en tiempo real
+docker logs -f pot-game-container
+
+# Detener contenedor
+docker stop pot-game-container
+
+# Eliminar contenedor
+docker rm pot-game-container
+```
+
+## 🛠️ Stack Tecnico e Infraestructura
 
 - Framework: FastAPI (Python 3.11)
-- Arquitectura: Desacoplamiento por capas (API, lógica de datos y persistencia)
-- Persistencia: JSON local con validación de esquemas vía Pydantic
-- Calidad: Ruff (análisis estático de código)
+- Arquitectura: desacoplamiento por capas (API, logica de datos y persistencia)
+- Persistencia: JSON local con validacion de esquemas via Pydantic
+- Calidad: Ruff (analisis estatico de codigo)
 - CI/CD: GitHub Actions (pipeline automatizado de lint y tests)
 
 ## 🧪 Calidad y Pruebas
 
-Este proyecto utiliza Pytest para garantizar la integridad de los endpoints y la lógica de negocio.
+Este proyecto utiliza pytest para garantizar la integridad de endpoints y logica de negocio.
 
 ```bash
 # Ejecutar linter (Ruff)
 ruff check .
 
-# Ejecutar suite de tests (integración y unitarios)
+# Ejecutar suite de tests (integracion y unitarios)
 pytest
 
-# Generar reporte de cobertura de código
+# Generar reporte de cobertura de codigo
 pytest --cov=main --cov=database --cov-report=term-missing
 ```
 
 ## 🛰️ Referencia de Endpoints
 
-| Método | Endpoint | Funcionalidad                                            |
+| Metodo | Endpoint | Funcionalidad                                            |
 | ------ | -------- | -------------------------------------------------------- |
 | GET    | /        | Health check / root                                      |
-| GET    | /pot     | Genera una combinación aleatoria                         |
-| GET    | /items   | Lista todos los elementos del catálogo                   |
-| POST   | /add-pot | Registra un nuevo ítem (validación Pydantic)             |
-| PUT    | /items   | Actualiza un ítem existente                              |
-| DELETE | /items   | Elimina un ítem (requiere query params `kind` y `value`) |
+| GET    | /pot     | Genera una combinacion aleatoria                         |
+| GET    | /items   | Lista todos los elementos del catalogo                   |
+| POST   | /add-pot | Registra un nuevo item (validacion Pydantic)             |
+| PUT    | /items   | Actualiza un item existente                              |
+| DELETE | /items   | Elimina un item (requiere query params `kind` y `value`) |
 
-## 🔍 Verificación del Sistema
+## 🔍 Verificacion del Sistema
 
-Para confirmar que la instalación fue exitosa, ejecuta:
+Para confirmar que la instalacion fue exitosa, ejecuta:
 
 ```bash
 curl http://127.0.0.1:8000/
@@ -91,17 +125,17 @@ Debe retornar algo como:
 
 ## ⚠️ Troubleshooting
 
-- Error: command not found: uvicorn
+- Error: `command not found: uvicorn`
   Activa el entorno virtual (`venv`) y reinstala dependencias con `pip install -r requirements.txt`.
 
 - Fallo en GitHub Actions
-  Verifica que todas las dependencias nuevas estén en `requirements.txt` y vuelve a ejecutar CI.
+  Verifica que nuevas dependencias esten en `requirements.txt` y vuelve a ejecutar CI.
 
 - Problemas de persistencia
-  Si `data.json` no se encuentra o está corrupto, restaura el archivo en la raíz del proyecto.
+  Si `data.json` no se encuentra o esta corrupto, restauralo en la raiz del proyecto.
 
 ## Tracks de Desarrollo Futuro (Roadmap)
 
-- [ ] Migración de JSON a persistencia relacional con SQLite
-- [ ] Implementación de autenticación basada en JWT
-- [ ] Containerización con Docker para despliegue simplificado
+- [ ] Migracion de JSON a persistencia relacional con SQLite
+- [ ] Implementacion de autenticacion basada en JWT
+- [ ] Containerizacion con Docker para despliegue simplificado
