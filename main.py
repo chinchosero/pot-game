@@ -3,9 +3,10 @@ from pydantic import BaseModel
 from typing import Optional, Literal
 import random
 from database import JSONDatabase
+from data_repository import DataRepository
 
 app = FastAPI()
-db = JSONDatabase()
+db: DataRepository = JSONDatabase()
 
 class UpdateItemRequest(BaseModel):
     kind: Literal["emotions", "topics"]

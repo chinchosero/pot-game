@@ -1,7 +1,10 @@
 import json
 import os
+from data_repository import DataRepository
 
-class JSONDatabase:
+
+class JSONDatabase(DataRepository):
+
     def __init__(self, file_name="data.json"):
         self.file_path = os.path.join(os.path.dirname(__file__), file_name)
 
