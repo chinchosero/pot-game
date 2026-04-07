@@ -21,94 +21,97 @@ class JSONDatabase(DataRepository):
         """Normalize string for case-insensitive comparison."""
         return value.strip().lower()
     
-    def get_all(self):
-        """Get all emotions and topics."""
+    # Categories
+    
+    def get_categories(self) -> list[str]:
+        """Get a list of all categories."""
+        return list(self._load().keys())
+    
+    def add_category(self, name: str):
+        clean = name.strip()
+        if not clean:
+            raise ValueError("Category name cannot be empty.")
+        data = self._load()
+        if clean in data:
+            raise ValueError(f"Category already exists: {clean}")
+        data[clean] = []
+        self._save(data)
+
+    def delete_category(self, name: str):
+        data = self._load()
+        key = next((k for k in data if self.normalize(k) == self.normalize(name)), None)
+        if key is None:
+            raise ValueError(f"Category not found: {name}")
+        del data[key]
+        self._save(data)
+
+    # Items
+
+    def get_all(self) -> dict:
         return self._load()
     
-    def get_emotions(self):
-        """Get all emotions."""
-        return self._load().get("emotions", [])
+    def get_items_by_category(self, category: str) -> list[str]:
+        data = self._load()
+        key = next((k for k in data if self.normalize(k) == self.normalize(category)), None)
+        if key is None:
+            raise ValueError(f"Category not found: {category}")
+        return data[key]
     
-    def get_topics(self):
-        """Get all topics."""
-        return self._load().get("topics", [])
-    
-    def add_item(self, kind, value):
-        """Add an item. Raises ValueError if invalid or duplicate."""
-        if kind not in ("emotions", "topics"):
-            raise ValueError(f"Invalid kind: {kind}")
-
+    def add_item(self, category: str, value: str) -> None:
         clean_value = value.strip()
         if not clean_value:
             raise ValueError("Value cannot be empty.")
-        
         data = self._load()
-        data.setdefault(kind, [])
-
-        # Check for duplicates using normalized comparison
-        existing_normalized = {self.normalize(item) for item in data[kind] if isinstance(item, str)}
-        if self.normalize(clean_value) in existing_normalized:
-            raise ValueError(f"Duplicate {kind[:-1]}: {clean_value} already exists.")
-        
-        data[kind].append(clean_value)
+        key = next((k for k in data if self.normalize(k) == self.normalize(category)), None)
+        if key is None:
+            raise ValueError(f"Category not found: {category}")
+        existing = {self.normalize(i) for i in data[key] if isinstance(i, str)}
+        if self.normalize(clean_value) in existing:
+            raise ValueError(f"Duplicate item in {category}: {clean_value} already exists.")
+        data[key].append(clean_value)
         self._save(data)
     
-    def delete_item(self, kind, value):
-        """Delete an item. Raises ValueError if not found."""
-        if kind not in ("emotions", "topics"):
-            raise ValueError(f"Invalid kind: {kind}")
-        
+    def delete_item(self, category: str, value: str) -> str:
         data = self._load()
-        items = data.get(kind, [])
-        
-        target_normalized = self.normalize(value)
-        index_to_delete = next(
-            (i for i, item in enumerate(items) if isinstance(item, str) and self.normalize(item) == target_normalized),
+        key = next((k for k in data if self.normalize(k) == self.normalize(category)), None)
+        if key is None:
+            raise ValueError(f"Category not found: {category}")
+        items = data[key]
+        idx = next(
+            (i for i, item in enumerate(items) if self.normalize(item) == self.normalize(value)),
             None
         )
-        
-        if index_to_delete is None:
-            raise ValueError(f"{kind[:-1].capitalize()} not found: {value}")
-        
-        removed = items.pop(index_to_delete)
-        data[kind] = items
+        if idx is None:
+            raise ValueError(f"Item not found in {category}: {value}")
+        removed = items.pop(idx)
+        data[key] = items
         self._save(data)
         return removed
-    
-    def update_item(self, kind, old_value, new_value):
-        """Update an item. Raises ValueError if not found or duplicate."""
-        if kind not in ("emotions", "topics"):
-            raise ValueError(f"Invalid kind: {kind}")
 
+    
+    def update_item(self, category: str, old_value: str, new_value: str) -> dict:
         clean_new = new_value.strip()
         if not clean_new:
             raise ValueError("New value cannot be empty.")
-        
         data = self._load()
-        items = data.get(kind, [])
-        
-        old_normalized = self.normalize(old_value)
-        index_to_update = next(
-            (i for i, item in enumerate(items) if isinstance(item, str) and self.normalize(item) == old_normalized),
+        key = next((k for k in data if self.normalize(k) == self.normalize(category)), None)
+        if key is None:
+            raise ValueError(f"Category not found: {category}")
+        items = data[key]
+        idx = next(
+            (i for i, item in enumerate(items) if self.normalize(item) == self.normalize(old_value)),
             None
         )
-        
-        if index_to_update is None:
-            raise ValueError(f"{kind[:-1].capitalize()} not found: {old_value}")
-        
-        # Check for duplicates using normalized comparison
-        new_normalized = self.normalize(clean_new)
-        duplicate_exists = any(
-            i != index_to_update and isinstance(item, str) and self.normalize(item) == new_normalized
+        if idx is None:
+            raise ValueError(f"Item not found in {category}: {old_value}")
+        duplicate = any(
+            i != idx and self.normalize(item) == self.normalize(clean_new)
             for i, item in enumerate(items)
         )
-
-        if duplicate_exists:
-            raise ValueError(f"Duplicate {kind[:-1]}: {clean_new} already exists.")
-        
-        old_item = items[index_to_update]
-        items[index_to_update] = clean_new
-        data[kind] = items
+        if duplicate:
+            raise ValueError(f"Duplicate item in {category}: {clean_new} already exists.")
+        old_item = items[idx]
+        items[idx] = clean_new
+        data[key] = items
         self._save(data)
-
         return {"old": old_item, "new": clean_new}

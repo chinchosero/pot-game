@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional, Literal
+from typing import Optional
 import random
 from database import JSONDatabase
 from data_repository import DataRepository
@@ -8,102 +8,146 @@ from data_repository import DataRepository
 app = FastAPI()
 db: DataRepository = JSONDatabase()
 
+# --- Models ---
+
+class CategoryRequest(BaseModel):
+    name: str
+
+class AddItemRequest(BaseModel):
+    category: str
+    value: str
+
 class UpdateItemRequest(BaseModel):
-    kind: Literal["emotions", "topics"]
+    category: str
     old_value: str
     new_value: str
 
-class PotItem(BaseModel):
-    emotions: Optional[str] = None
-    topics: Optional[str] = None
+# --- Root ---
 
 @app.get("/")
 def read_root():
-    return {"message": "Pot-Game API is reading from JSON!"}
+    return {"message": "Pot-Game API with dynamic categories!"}
 
-@app.get("/pot")
-def get_pot():
-    emotions = db.get_emotions()
-    topics = db.get_topics()
+# --- Categories Endpoints ---
 
-    if not emotions or not topics:
-        raise HTTPException(status_code=404, detail="No emotions or topics available in the data.")
-
-    return PotItem(
-        emotions=random.choice(emotions),
-        topics=random.choice(topics)
-    )
-
-@app.get("/items")
-def list_all_items():
+@app.get("/categories")
+def list_categories():
+    """List all available categories."""
     try:
-        data = db.get_all()
-        emotions = data.get("emotions", [])
-        topics = data.get("topics", [])
-        return {
-            "emotions": emotions,
-            "topics": topics,
-            "counts": {
-                "emotions": len(emotions),
-                "topics": len(topics)
-            }
-        }
+        categories = db.get_categories()
+        return {"categories": categories, "count": len(categories)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/add-pot")
-def add_pot(new_item: PotItem):
-    if not new_item.emotions and not new_item.topics:
-        raise HTTPException(status_code=400, detail="User must provide at least one field: emotions or topics.")
+@app.post("/categories")
+def create_category(request: CategoryRequest):
+    """Create a new category."""
+    try:
+        db.add_category(request.name)
+        return {"message": f"Category '{request.name}' created successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    added = {"emotions": None, "topics": None}
+@app.delete("/categories/{category_name}")
+def remove_category(category_name: str):
+    """Delete a category and all its items."""
+    try:
+        db.delete_category(category_name)
+        return {"message": f"Category '{category_name}' deleted successfully"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    if new_item.emotions:
-        try:
-            db.add_item("emotions", new_item.emotions)
-            added["emotions"] = new_item.emotions.strip()
-        except ValueError as e:
+# --- Items Endpoints ---
+
+@app.get("/items")
+def list_items(category: Optional[str] = Query(None, description="Filter by specific category. If omitted, returns all items.")):
+    """List all items, optionally filtered by category."""
+    try:
+        if category:
+            items = db.get_items_by_category(category)
+            return {category: items, "count": len(items)}
+        else:
+            data = db.get_all()
+            counts = {cat: len(items) for cat, items in data.items()}
+            return {"items": data, "summary": counts}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/items")
+def create_item(request: AddItemRequest):
+    """Add a new item to a category."""
+    try:
+        db.add_item(request.category, request.value)
+        return {
+            "message": "Item added successfully",
+            "category": request.category,
+            "value": request.value
+        }
+    except ValueError as e:
+        error_msg = str(e).lower()
+        if "not found" in error_msg:
+            raise HTTPException(status_code=404, detail=str(e))
+        elif "duplicate" in error_msg:
             raise HTTPException(status_code=409, detail=str(e))
-
-    if new_item.topics:
-        try:
-            db.add_item("topics", new_item.topics)
-            added["topics"] = new_item.topics.strip()
-        except ValueError as e:
-            raise HTTPException(status_code=409, detail=str(e))
-
-    return {"message": "New item added successfully!", "added": added}
+        else:
+            raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/items")
-def update_item(payload: UpdateItemRequest):
+def modify_item(payload: UpdateItemRequest):
+    """Update an item in a category."""
     try:
-        result = db.update_item(payload.kind, payload.old_value, payload.new_value)
+        result = db.update_item(payload.category, payload.old_value, payload.new_value)
         return {
-            "message": "Item updated successfully", 
-            "kind": payload.kind, 
+            "message": "Item updated successfully",
+            "category": payload.category,
             "old_value": result["old"],
             "new_value": result["new"]
-         }
+        }
     except ValueError as e:
-        error_msg = str(e)
-        if "not found" in error_msg.lower():
-            raise HTTPException(status_code=404, detail=error_msg)
-        elif "duplicate" in error_msg.lower():
-            raise HTTPException(status_code=409, detail=error_msg)
+        error_msg = str(e).lower()
+        if "not found" in error_msg:
+            raise HTTPException(status_code=404, detail=str(e))
+        elif "duplicate" in error_msg:
+            raise HTTPException(status_code=409, detail=str(e))
         else:
-            raise HTTPException(status_code=400, detail=error_msg)
+            raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/items")
-def delete_item(
-    kind: Literal["emotions", "topics"] = Query(..., description="Select a category to delete from: 'emotions' or 'topics'"),
-    value: str = Query(..., min_length=1, description="Write the exact value to delete from the selected category.")
+def remove_item(
+    category: str = Query(..., min_length=1, description="Category name"),
+    value: str = Query(..., min_length=1, description="Item value to delete")
 ):
+    """Delete an item from a category."""
     try:
-        removed = db.delete_item(kind, value)
-        return {"message": "Item deleted successfully", "kind": kind, "removed": removed}
+        removed = db.delete_item(category, value)
+        return {"message": "Item deleted successfully", "category": category, "removed": removed}
     except ValueError as e:
-        error_msg = str(e)
-        if "not found" in error_msg.lower():
-            raise HTTPException(status_code=404, detail=error_msg)
-        else:
-            raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Pot (Recipe) Endpoint ---
+
+@app.get("/pot")
+def get_pot(categories: list[str] = Query(..., min_length=1, description="Categories to mix in the pot")):
+    """Generate a 'pot' (recipe) with one random item from each selected category."""
+    result = {}
+    for category in categories:
+        try:
+            items = db.get_items_by_category(category)
+        except ValueError:
+            raise HTTPException(status_code=404, detail=f"Category not found: {category}")
+        if not items:
+            raise HTTPException(status_code=404, detail=f"No items in category: {category}")
+        result[category] = random.choice(items)
+    return {"ingredients": result}
